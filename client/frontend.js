@@ -3,13 +3,12 @@ import { createApp } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js'
 const App = {
     data() {
         return {
+            loading: false,
             form: {
                 name: '',
                 value: ''
             },
-            contacts: [
-                { id:1, name: 'Nick', value: '+7-921-100-20-30', marked: false }
-            ]
+            contacts: []
         }
     },
     computed: {
@@ -18,19 +17,63 @@ const App = {
       }
     },
     methods: {
-         createContact() {
+         async createContact() {
              const {...contact} = this.form
-             this.contacts.push({...contact, id: Date.now(), marked: false})
+
+             const newContact = await request('/api/contacts', 'POST', contact)
+
+             this.contacts.push(newContact)
              this.form.name = this.form.value = ''
+
          },
-        markContact(id) {
+        async markContact(id) {
             const contact = this.contacts.find(c => c.id === id)
-            contact.marked = true
+            const updated = await request(`/api/contacts/${id}`, 'PUT', {
+                ...contact,
+                marked: true
+            })
+            contact.marked = updated.marked
         },
-        removeContact(id) {
+        async removeContact(id) {
+            await request(`/api/contacts/${id}`, 'DELETE')
             this.contacts = this.contacts.filter(c => c.id !== id)
         }
+    },
+    async mounted() {
+        this.loading = true
+        this.contacts = await request('/api/contacts')
+        this.loading = false
     }
 }
+const app = createApp(App)
+app.component('loader', {
+    template: `
+        <div style="display: flex; justify-content: center; align-items: center">
+            <div class="spinner-border" role="status">
+                <span class="sr-only">Loaing...</span>
+            </div>
+        </div>
+    `
+})
+app.mount('#app')
 
-createApp(App).mount('#app')
+async function request(url, method = 'GET', data = null) {
+    try {
+        const headers = {}
+        let body
+
+        if (data) {
+            headers['Content-Type'] = 'application/json'
+            body = JSON.stringify(data)
+        }
+
+        const response = await fetch(url, {
+            method,
+            headers,
+            body
+        })
+        return await response.json()
+    } catch (e) {
+        console.warn('Error', e.message)
+    }
+}
